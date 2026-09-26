@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-cairo: 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-naskh: 'Noto Naskh Arabic', 'Traditional Arabic', serif;
+  }
+
+  body {
+    font-family: var(--font-cairo);
+  }
+}
+
+.font-naskh {
+  font-family: var(--font-naskh);
+}
+
+.font-cairo {
+  font-family: var(--font-cairo);
+}
+
+/* Accessibility & Reading Themes */
+.theme-ivory {
+  background-color: #FAF4E6 !important;
+  color: #2D251E !important;
+}
+
+.theme-mint {
+  background-color: #F1F8F4 !important;
+  color: #143825 !important;
+}
+
+.theme-sky {
+  background-color: #F0F6FC !important;
+  color: #0E3554 !important;
+}
+
+.theme-dark {
+  background-color: #18191C !important;
+  color: #F3F4F6 !important;
+}
+
+/* Text Diacritic Color Highlighting Option */
+.highlight-diacritics {
+  /* Enhances visual contrast of tashkeel for readers with dyslexia */
+  letter-spacing: 0.05em;
+  word-spacing: 0.15em;
+}
+
+/* Smooth transitions for interactive reading */
+.reading-word {
+  transition: all 150ms ease-out;
+}
+
+.reading-word.active-tts {
+  background-color: #FEF08A;
+  color: #854D0E;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px #FEF08A;
+  font-weight: 700;
+  transform: scale(1.05);
+}
+
+.theme-dark .reading-word.active-tts {
+  background-color: #CA8A04;
+  color: #18181B;
+  box-shadow: 0 0 0 3px #CA8A04;
+}
+
+/* Reading ruler styling */
+.reading-ruler-overlay {
+  pointer-events: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  transition: top 80ms ease-out;
+}
+
