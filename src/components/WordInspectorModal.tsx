@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Volume2, Sparkles, BookOpen, Layers, CheckCircle2 } from 'lucide-react';
-import { VocabularyWord } from '../types';
+import { VocabularyWord, TeacherVoice } from '../types';
+import { getTeacherVoiceProfile, getActiveTeacherVoice, speakEducationalHint } from '../utils/audioCheer';
 
 interface WordInspectorModalProps {
   word: string;
@@ -8,6 +9,7 @@ interface WordInspectorModalProps {
   onClose: () => void;
   onAskAi: (word: string) => void;
   onSpeak: (text: string) => void;
+  teacherVoice?: TeacherVoice;
 }
 
 export const WordInspectorModal: React.FC<WordInspectorModalProps> = ({
@@ -16,8 +18,11 @@ export const WordInspectorModal: React.FC<WordInspectorModalProps> = ({
   onClose,
   onAskAi,
   onSpeak,
+  teacherVoice,
 }) => {
   const [copied, setCopied] = useState(false);
+  const activeTeacher = teacherVoice || getActiveTeacherVoice();
+  const profile = getTeacherVoiceProfile(activeTeacher);
 
   // Generate automated sound syllables if not in vocab
   const syllables = matchedVocab?.syllables || generateHeuristicSyllables(word);
@@ -131,18 +136,21 @@ export const WordInspectorModal: React.FC<WordInspectorModalProps> = ({
             </div>
           ) : (
             <div className="text-xs text-stone-600 bg-stone-50 p-3 rounded-xl border border-stone-200">
-              <p>هذه الكلمة جزء من النص المشكول. يمكنك الاستماع إليها أو إرسالها إلى المعلم الصديق لشرح أدق ومفصل!</p>
+              <p>هذه الكلمة جزء من النص المشكول. يمكنكِ الاستماع لنطقها أو طلب شرح تربوي ميسّر من {profile.shortName}!</p>
             </div>
           )}
 
           {/* Action buttons */}
           <div className="pt-2 flex items-center gap-2">
             <button
-              onClick={() => onAskAi(cleanWord)}
-              className="flex-1 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              onClick={() => {
+                onAskAi(cleanWord);
+                speakEducationalHint(`تفضلي يا بطلة، الكلمة هي: "${cleanWord}". انتبهي لمخارج حروفها وحركاتها بدقة! — ${profile.shortName}`, undefined, activeTeacher);
+              }}
+              className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>استفسر من المعلم الصديق عنها</span>
+              <span>استفسري من {profile.shortName} عنها</span>
             </button>
             <button
               onClick={handleCopy}

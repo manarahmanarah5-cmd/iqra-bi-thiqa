@@ -39,13 +39,20 @@ export const DictationActivity: React.FC<DictationActivityProps> = ({
     speakCheer(text);
   };
 
+  const handleSpeakSlowly = (text: string) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const spoken = words.join(' ... ');
+    speakEducationalHint(`استمعي بهدوء وتأنٍّ: ${spoken}`);
+  };
+
   const handleSpeakHint = (hintText: string) => {
     speakEducationalHint(`تلميح إملائي: ${hintText}`);
   };
 
   const cleanText = (str: string) => {
     return str
-      .replace(/[\u064B-\u0652\u0670]/g, '')
+      .replace(/[\u064B-\u0652\u0670]/g, '') // remove diacritics
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،"«»]/g, '') // remove punctuation
       .replace(/[أإآ]/g, 'ا')
       .replace(/ة/g, 'ه')
       .replace(/ى/g, 'ي')
@@ -62,7 +69,22 @@ export const DictationActivity: React.FC<DictationActivityProps> = ({
     const sClean = cleanText(userInput);
     const tClean = cleanText(currentItem.targetWordOrSentence);
 
-    if (sClean === tClean || sClean.includes(tClean.slice(0, Math.min(10, tClean.length)))) {
+    // Sentence matching: check exact or token match
+    const userTokens = sClean.split(/\s+/).filter(Boolean);
+    const targetTokens = tClean.split(/\s+/).filter(Boolean);
+
+    let matchCount = 0;
+    targetTokens.forEach(token => {
+      if (userTokens.some(u => u === token || u.includes(token) || token.includes(u))) {
+        matchCount++;
+      }
+    });
+
+    const isMatch = sClean === tClean ||
+      (targetTokens.length > 0 && (matchCount / targetTokens.length) >= 0.8) ||
+      sClean.includes(tClean);
+
+    if (isMatch) {
       setStatus('correct');
       setStarsWon(prev => prev + 10);
       setIncorrectAttempts(0);
@@ -113,23 +135,58 @@ export const DictationActivity: React.FC<DictationActivityProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-violet-200/80 pb-4">
         <div>
-          <h3 className="text-xl sm:text-2xl font-black text-violet-950 font-cairo flex items-center gap-2">
-            <span>✏️ تدريب الإملاء التفاعلي الشيق</span>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-violet-200 text-violet-900 text-xs font-black">
+              إملاء ٥ جمل كاملة
+            </span>
+            <span className="text-xs text-stone-500 font-bold">
+              الجملة ({currentIndex + 1} من {dictationItems.length})
+            </span>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-violet-950 font-cairo flex items-center gap-2 mt-1">
+            <span>✏️ تدريب الإملاء على الجمل الكاملة</span>
           </h3>
           <p className="text-xs sm:text-sm font-bold text-stone-600 mt-1">
-            اسْتَمِعِي بِتَرْكِيزٍ وَاكْتُبِي مَا سَمِعْتِهِ، ثُمَّ اضْغَطِي عَلَى تَحَقَّقِي يَا {studentName || 'بَطَلَتِي'} 🌸
+            اسْتَمِعِي لِلجُمْلَةِ بِتَرْكِيزٍ وَاكْتُبِيهَا كَامِلَةً، ثُمَّ اضْغَطِي عَلَى تَحَقَّقِي يَا {studentName || 'بَطَلَتِي'} 🌸
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          {/* 5 Sentence Stepper Bubbles */}
+          <div className="flex items-center gap-1.5 bg-white/80 p-1.5 rounded-2xl border border-violet-200 shadow-2xs">
+            {dictationItems.map((item, idx) => {
+              const isDone = completedIds.includes(item.id);
+              const isCurrent = idx === currentIndex;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    playPopSound();
+                    setCurrentIndex(idx);
+                    setUserInput('');
+                    setStatus('idle');
+                    setShowModelAnswer(false);
+                    setShowHint(false);
+                  }}
+                  className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center transition-all cursor-pointer ${
+                    isCurrent
+                      ? 'bg-violet-600 text-white shadow-sm ring-2 ring-violet-300'
+                      : isDone
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-stone-100 text-stone-600 hover:bg-violet-100'
+                  }`}
+                  title={`الجملة ${idx + 1}`}
+                >
+                  {isDone ? '✓' : idx + 1}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black shadow-xs">
             <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
             <span>+{starsWon} نُجُوم 🌟</span>
           </div>
-
-          <span className="text-xs font-black text-violet-700 bg-white px-3 py-1.5 rounded-2xl border border-violet-200 shadow-xs">
-            تَدْرِيبُ {currentIndex + 1} مِنْ {dictationItems.length}
-          </span>
         </div>
       </div>
 
@@ -137,10 +194,18 @@ export const DictationActivity: React.FC<DictationActivityProps> = ({
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => handleSpeak(currentItem.targetWordOrSentence)}
-          className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-black px-6 py-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-md active:scale-95 transition-all"
+          className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-black px-5 py-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-md active:scale-95 transition-all"
         >
           <Volume2 className="w-5 h-5 animate-pulse" />
-          <span>اسْتَمِعِي لِلإِمْلَاءِ بِصَوْتٍ عَالٍ 🔊</span>
+          <span>اسْتَمِعِي لِلجُمْلَةِ كَامِلَةً 🔊</span>
+        </button>
+
+        <button
+          onClick={() => handleSpeakSlowly(currentItem.targetWordOrSentence)}
+          className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black px-4 py-3 rounded-2xl text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 transition-all"
+          title="قراءة هادئة كلمة كلمة للمساعدة في الكتابة"
+        >
+          <span>🐢 إِمْلَاءٌ بَطِيءٌ كَلِمَةً كَلِمَةً</span>
         </button>
 
         <button

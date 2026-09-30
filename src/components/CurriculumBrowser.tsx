@@ -28,9 +28,10 @@ export const CurriculumBrowser: React.FC<CurriculumBrowserProps> = ({
   const categories = [
     { id: 'all', name: 'جميع النصوص' },
     { id: 'أدبي', name: 'أدبي وقصصي' },
-    { id: 'علمي وتكنولوجي', name: 'علمي وتكنولوجي' },
+    { id: 'معلوماتي', name: 'علمي ومعلوماتي' },
     { id: 'قيمي', name: 'تربوي وقيمي' },
-    { id: 'تاريخي وثقافي', name: 'تاريخي وحضاري' },
+    { id: 'تاريخي وحضاري', name: 'تاريخي وحضاري' },
+    { id: 'سيرة وتراجم', name: 'سير وتراجم' },
   ];
 
   const filteredLessons = lessons.filter((l) => {

@@ -11,6 +11,7 @@ import { LessonWorkflow } from './components/LessonWorkflow';
 import { StudentProgress } from './components/StudentProgressModal';
 import { CenterLogo } from './components/CenterLogo';
 import { X, Heart } from 'lucide-react';
+import { setActiveTeacherVoice, speakTeacherGreeting } from './utils/audioCheer';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   theme: 'ivory',
@@ -24,6 +25,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   rulerHeight: 65,
   rulerColor: 'rgba(254, 240, 138, 0.25)',
   speechRate: 0.85,
+  teacherVoice: 'female',
 };
 
 const DEFAULT_STATS: UserStats = {
@@ -90,6 +92,9 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('iqra_reader_prefs', JSON.stringify(preferences));
+      if (preferences.teacherVoice) {
+        setActiveTeacherVoice(preferences.teacherVoice);
+      }
     } catch (e) {
       console.warn('LocalStorage save failed:', e);
     }
@@ -179,6 +184,9 @@ export default function App() {
       {/* Vibrant Header with Cheering Voice Button */}
       <Header
         studentName={studentName}
+        onTestVoice={() => {
+          speakTeacherGreeting('female', studentName);
+        }}
         onGoHome={() => setAppStep('welcome')}
         onGoGrades={() => setAppStep('about-and-grade')}
         onOpenProgress={() => setShowProgressModal(true)}

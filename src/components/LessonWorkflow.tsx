@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Headphones,
   Mic,
@@ -12,7 +12,9 @@ import {
   Settings2,
   Printer,
   Star,
-  Lightbulb
+  Lightbulb,
+  Gauge,
+  RotateCcw
 } from 'lucide-react';
 import { ReadingLesson, UserPreferences, LessonSubStep } from '../types';
 import { InteractiveReader } from './InteractiveReader';
@@ -61,6 +63,71 @@ export const LessonWorkflow: React.FC<LessonWorkflowProps> = ({
   const [showHintsModal, setShowHintsModal] = useState(false);
   const [hintsTargetDictIndex, setHintsTargetDictIndex] = useState(0);
   const [hintsHighlightedWord, setHintsHighlightedWord] = useState('');
+
+  // Live real-time word tracking state while recording voice
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [currentRecordingWordIndex, setCurrentRecordingWordIndex] = useState(0);
+  const [paceSpeed, setPaceSpeed] = useState<'calm' | 'normal' | 'fast'>('normal');
+
+  // Breakdown text into paragraph words with global indices
+  const paragraphWordList = useMemo(() => {
+    let counter = 0;
+    return lesson.paragraphs.map(p => {
+      const pText = preferences.showDiacritics ? p : p.replace(/[ًٌٍَُِّْ]/g, '');
+      const pWords = pText.split(/\s+/).filter(w => w.trim().length > 0);
+      const mapped = pWords.map(w => {
+        const idx = counter;
+        counter++;
+        return { word: w, globalIndex: idx };
+      });
+      return mapped;
+    });
+  }, [lesson.paragraphs, preferences.showDiacritics]);
+
+  const allWordsFlattened = useMemo(() => {
+    return paragraphWordList.flat();
+  }, [paragraphWordList]);
+
+  // Word-by-word active auto-pacing tracker while recording
+  useEffect(() => {
+    if (!isRecordingVoice) return;
+    const intervalMs = paceSpeed === 'calm' ? 1400 : paceSpeed === 'fast' ? 700 : 950;
+    const timer = setInterval(() => {
+      setCurrentRecordingWordIndex(prev => {
+        if (prev < allWordsFlattened.length - 1) {
+          return prev + 1;
+        }
+        return prev;
+      });
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [isRecordingVoice, paceSpeed, allWordsFlattened.length]);
+
+  // Handle Speech Recognition transcript to sync reading word
+  const handleSpeechWordRecognized = (transcript: string) => {
+    const cleanTokens = transcript
+      .replace(/[ًٌٍَُِّْ.,\/#!$%\^&\*;:{}=\-_`~()؟،]/g, '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (cleanTokens.length === 0) return;
+    const lastSpokenWord = cleanTokens[cleanTokens.length - 1];
+
+    const startSearch = Math.max(0, currentRecordingWordIndex - 2);
+    const endSearch = Math.min(allWordsFlattened.length, currentRecordingWordIndex + 10);
+
+    for (let i = startSearch; i < endSearch; i++) {
+      const targetClean = allWordsFlattened[i].word
+        .replace(/[ًٌٍَُِّْ.,\/#!$%\^&\*;:{}=\-_`~()؟،]/g, '')
+        .trim();
+
+      if (targetClean === lastSpokenWord || targetClean.startsWith(lastSpokenWord) || lastSpokenWord.startsWith(targetClean)) {
+        setCurrentRecordingWordIndex(i);
+        break;
+      }
+    }
+  };
 
   // Check if dictation is fully completed for this lesson
   const isDictationFullyDone = lesson.dictationExercises.length > 0 &&
@@ -321,27 +388,165 @@ export const LessonWorkflow: React.FC<LessonWorkflowProps> = ({
               onRecordCompleted={() => {
                 onCompleteRecording(lesson.id);
               }}
+              onRecordingStateChange={(rec) => {
+                setIsRecordingVoice(rec);
+                if (rec) {
+                  // If starting, keep or reset word index
+                }
+              }}
+              onSpeechWordRecognized={handleSpeechWordRecognized}
+              onResetRecording={() => {
+                setCurrentRecordingWordIndex(0);
+              }}
             />
 
-            {/* Display Text Reminder for Recording */}
+            {/* Live Reading Word Tracker Banner while recording */}
+            {isRecordingVoice && (
+              <div className="bg-gradient-to-r from-amber-500 via-rose-500 to-pink-500 text-white p-4 rounded-3xl shadow-md flex flex-wrap items-center justify-between gap-3 text-right">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white text-rose-600 flex items-center justify-center font-black animate-pulse shadow-sm">
+                    🎙️
+                  </div>
+                  <div>
+                    <span className="text-xs font-black block text-amber-200">
+                      تلوين الكلمات المباشر أثناء التسجيل الصوتي 🌸
+                    </span>
+                    <span className="text-sm font-bold font-cairo">
+                      الكلمة الحالية: «{allWordsFlattened[currentRecordingWordIndex]?.word || ''}»
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Pace Speed Selector */}
+                  <div className="flex items-center gap-1 bg-black/20 p-1 rounded-2xl text-xs font-bold">
+                    <span className="text-[11px] px-2 text-pink-100 hidden sm:inline">سرعة التتبع:</span>
+                    <button
+                      onClick={() => setPaceSpeed('calm')}
+                      className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
+                        paceSpeed === 'calm' ? 'bg-white text-stone-900 shadow-xs' : 'text-white/80 hover:text-white'
+                      }`}
+                    >
+                      هادئة
+                    </button>
+                    <button
+                      onClick={() => setPaceSpeed('normal')}
+                      className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
+                        paceSpeed === 'normal' ? 'bg-white text-stone-900 shadow-xs' : 'text-white/80 hover:text-white'
+                      }`}
+                    >
+                      معتدلة
+                    </button>
+                    <button
+                      onClick={() => setPaceSpeed('fast')}
+                      className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
+                        paceSpeed === 'fast' ? 'bg-white text-stone-900 shadow-xs' : 'text-white/80 hover:text-white'
+                      }`}
+                    >
+                      سريعة
+                    </button>
+                  </div>
+
+                  {/* Manual Step buttons */}
+                  <button
+                    onClick={() => setCurrentRecordingWordIndex(prev => Math.max(0, prev - 1))}
+                    className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    title="الكلمة السابقة"
+                  >
+                    السابقة ◀
+                  </button>
+                  <button
+                    onClick={() => setCurrentRecordingWordIndex(prev => Math.min(allWordsFlattened.length - 1, prev + 1))}
+                    className="px-3 py-1.5 bg-white text-stone-900 hover:bg-stone-100 rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
+                    title="الكلمة التالية"
+                  >
+                    التالية ▶
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Interactive Reading Text Display with Real-time Word Highlighting */}
             <div
-              className="p-6 sm:p-8 rounded-3xl border-2 border-rose-100 bg-white shadow-sm space-y-4 font-naskh"
+              className={`p-6 sm:p-8 rounded-3xl border-2 shadow-sm space-y-5 font-naskh transition-colors ${
+                isRecordingVoice ? 'border-amber-300 bg-amber-50/20 ring-4 ring-amber-100' : 'border-rose-100 bg-white'
+              }`}
               style={{
                 fontSize: `${preferences.fontSize}px`,
                 lineHeight: preferences.lineHeight,
               }}
             >
               <div className="flex items-center justify-between pb-3 border-b border-rose-100 text-xs text-stone-500 font-sans">
-                <span className="font-bold text-rose-900">نص الدرس للقراءة الجهرية والتسجيل:</span>
-                <span className="font-bold">{lesson.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-rose-900">نص الدرس للقراءة الجهرية والتسجيل:</span>
+                  <span className="font-bold">{lesson.title}</span>
+                </div>
+                {isRecordingVoice ? (
+                  <span className="px-2.5 py-1 bg-amber-100 text-amber-900 rounded-full font-bold animate-pulse text-[11px]">
+                    ● جارٍ تلوين الكلمة المقروءة ({currentRecordingWordIndex + 1} من {allWordsFlattened.length})
+                  </span>
+                ) : (
+                  <span className="text-stone-400 text-[11px]">
+                    (اضغطي على الميكروفون لبدء التسجيل وتلوين الكلمات تلقائياً)
+                  </span>
+                )}
               </div>
 
-              <div className="space-y-4">
-                {lesson.paragraphs.map((p, idx) => (
-                  <p key={idx} className="leading-relaxed text-stone-800">
-                    {preferences.showDiacritics ? p : p.replace(/[ًٌٍَُِّْ]/g, '')}
+              <div className="space-y-6">
+                {paragraphWordList.map((words, pIdx) => (
+                  <p key={pIdx} className="leading-relaxed text-stone-800">
+                    {words.map((item) => {
+                      const isCurrentWord = isRecordingVoice && currentRecordingWordIndex === item.globalIndex;
+                      const isReadWord = isRecordingVoice ? item.globalIndex < currentRecordingWordIndex : isRecordDone;
+
+                      if (isCurrentWord) {
+                        return (
+                          <span
+                            key={item.globalIndex}
+                            onClick={() => setCurrentRecordingWordIndex(item.globalIndex)}
+                            title="الكلمة التي تقرئينها حالياً"
+                            className="relative inline-block mx-1 my-0.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-200 text-stone-950 font-black shadow-md ring-4 ring-amber-400 scale-110 cursor-pointer animate-pulse transition-all duration-150 z-10"
+                          >
+                            {item.word}
+                            <span className="absolute -top-7 right-1/2 translate-x-1/2 px-2 py-0.5 bg-amber-600 text-white text-[10px] font-black rounded-full shadow-sm whitespace-nowrap pointer-events-none">
+                              🎙️ تقرأين الآن
+                            </span>
+                          </span>
+                        );
+                      }
+
+                      if (isReadWord) {
+                        return (
+                          <span
+                            key={item.globalIndex}
+                            onClick={() => setCurrentRecordingWordIndex(item.globalIndex)}
+                            title="تمت قراءتها - انقري للعودة إليها"
+                            className="inline-block mx-1 my-0.5 px-1.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-bold border border-emerald-300/60 cursor-pointer hover:bg-emerald-200 transition-colors"
+                          >
+                            {item.word}
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <span
+                          key={item.globalIndex}
+                          onClick={() => setCurrentRecordingWordIndex(item.globalIndex)}
+                          title="انقري لجعل المؤشر عند هذه الكلمة"
+                          className="inline-block mx-1 my-0.5 px-1 py-0.5 rounded-lg text-stone-800 hover:bg-rose-100/60 cursor-pointer transition-colors"
+                        >
+                          {item.word}
+                        </span>
+                      );
+                    })}
                   </p>
                 ))}
+              </div>
+
+              {/* Helpful Hint footer */}
+              <div className="pt-3 border-t border-rose-100 flex items-center justify-between text-xs text-stone-500 font-sans">
+                <span>💡 يمكنكِ النقر على أي كلمة لتحديد مؤشر القراءة إليها مباشرة.</span>
+                <span className="font-bold text-rose-800">إجمالي الكلمات: {allWordsFlattened.length} كلمة</span>
               </div>
             </div>
 

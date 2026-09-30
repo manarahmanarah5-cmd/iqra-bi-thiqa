@@ -66,6 +66,8 @@ export interface ReadingLesson {
   pedagogicalFocus: string;
 }
 
+export type TeacherVoice = 'female';
+
 export interface UserPreferences {
   theme: ReadingTheme;
   fontSize: number;
@@ -78,6 +80,7 @@ export interface UserPreferences {
   rulerHeight: number;
   rulerColor: string;
   speechRate: number;
+  teacherVoice: TeacherVoice;
 }
 
 export interface UserStats {

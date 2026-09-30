@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Type, Eye, Palette, Sliders, Volume2, RotateCcw, Check } from 'lucide-react';
 import { ReadingTheme, UserPreferences } from '../types';
+import { speakTeacherGreeting } from '../utils/audioCheer';
 
 interface ReadingToolboxProps {
   isOpen: boolean;
@@ -238,6 +239,49 @@ export const ReadingToolbox: React.FC<ReadingToolboxProps> = ({
             </div>
           </div>
 
+          {/* Section 6: Female Reader Voice */}
+          <div className="space-y-3 pt-2 border-t border-stone-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
+                <span className="text-base">🎙️</span>
+                <span>صوت القراءة (صوت أنثى نقي وواضح)</span>
+              </div>
+              <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded-full border border-rose-200">
+                صوت نسائي تربوي فقط ✨
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/50 text-right space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🌸</span>
+                  <div>
+                    <h4 className="text-xs font-black text-stone-900 font-cairo">صوت القارئة الموجهة</h4>
+                    <span className="text-[10px] text-rose-700 block font-semibold">نطق عربي تربوي سليم وواضح بالتشكيل التام</span>
+                  </div>
+                </div>
+                <Check className="w-4 h-4 text-rose-600 shrink-0" />
+              </div>
+              <p className="text-[11px] text-stone-600 leading-snug">
+                نبرة صوتية نسائية دافئة وواضحة، صُممت لمساعدة الطالبات على متابعة الكلمات، وتطوير الطلاقة، وضبط مخارج الحروف.
+              </p>
+              <button
+                type="button"
+                onClick={() => speakTeacherGreeting('female')}
+                className="w-full py-2 px-3 bg-white hover:bg-rose-100 text-rose-800 text-xs font-black rounded-lg border border-rose-200 flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>استماع تجريبي لصوت القارئة 🔊</span>
+              </button>
+            </div>
+
+            <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-950 flex items-center gap-2">
+              <span className="text-base shrink-0">✨</span>
+              <span>
+                <strong>صوت أنثوي خالص:</strong> تم استبعاد أي صوت رجالي نهائياً، وضبط التوليف الصوتي بطبقة ناعمة ومخارج دقيقة تناسب طالباتنا.
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

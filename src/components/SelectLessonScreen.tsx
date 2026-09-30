@@ -100,7 +100,8 @@ export const SelectLessonScreen: React.FC<SelectLessonScreenProps> = ({
         {[
           { id: 'all', name: 'جميع النصوص' },
           { id: 'أدبي', name: 'نصوص أدبية' },
-          { id: 'معلوماتي', name: 'نصوص علمية وتفسيرية' },
+          { id: 'معلوماتي', name: 'نصوص علمية ومعلوماتية' },
+          { id: 'قيمي', name: 'نصوص قيمية وتربوية' },
           { id: 'سيرة وتراجم', name: 'سير وتراجم' },
         ].map((cat) => (
           <button

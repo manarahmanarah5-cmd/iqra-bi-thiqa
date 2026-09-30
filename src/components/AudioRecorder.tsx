@@ -5,11 +5,17 @@ import { cheerRecordingStart, cheerRecordingFinished, playPopSound } from '../ut
 interface AudioRecorderProps {
   lessonTitle: string;
   onRecordCompleted?: () => void;
+  onRecordingStateChange?: (isRecording: boolean) => void;
+  onSpeechWordRecognized?: (transcript: string) => void;
+  onResetRecording?: () => void;
 }
 
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   lessonTitle,
   onRecordCompleted,
+  onRecordingStateChange,
+  onSpeechWordRecognized,
+  onResetRecording,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -22,6 +28,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
 
   const startRecording = async () => {
     try {
@@ -47,8 +54,37 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
       mediaRecorder.start();
       setIsRecording(true);
+      if (onRecordingStateChange) onRecordingStateChange(true);
       setRecordingTime(0);
       setFeedbackSaved(false);
+
+      // Start Web Speech Recognition in Arabic for real-time word tracking
+      try {
+        const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRec) {
+          const rec = new SpeechRec();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = 'ar-SA';
+          rec.onresult = (evt: any) => {
+            const results = evt.results;
+            if (results && results.length > 0) {
+              const latest = results[results.length - 1];
+              const transcript = latest[0]?.transcript || '';
+              if (transcript && onSpeechWordRecognized) {
+                onSpeechWordRecognized(transcript);
+              }
+            }
+          };
+          rec.onerror = (e: any) => {
+            console.debug('Speech recognition hint:', e);
+          };
+          rec.start();
+          speechRecognitionRef.current = rec;
+        }
+      } catch (err) {
+        console.debug('Speech recognition not available:', err);
+      }
 
       timerRef.current = window.setInterval(() => {
         setRecordingTime((prev) => prev + 1);
@@ -64,7 +100,16 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
       setIsRecording(false);
+      if (onRecordingStateChange) onRecordingStateChange(false);
       if (timerRef.current) clearInterval(timerRef.current);
+    }
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch (e) {
+        // ignore
+      }
+      speechRecognitionRef.current = null;
     }
   };
 
@@ -96,6 +141,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     setIsPlaying(false);
     setRecordingTime(0);
     setFeedbackSaved(false);
+    if (onResetRecording) onResetRecording();
   };
 
   const formatTime = (seconds: number) => {

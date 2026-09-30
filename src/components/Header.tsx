@@ -1,11 +1,11 @@
 import React from 'react';
-import { Volume2, Sliders, Settings2, Award, BookOpen, Sparkles, Home } from 'lucide-react';
-import { GradeLevel } from '../types';
-import { cheerWelcome } from '../utils/audioCheer';
+import { Sliders, Settings2, Award, BookOpen, Sparkles, Home } from 'lucide-react';
+import { TeacherVoice } from '../types';
 import { CenterLogo } from './CenterLogo';
 
 interface HeaderProps {
   studentName: string;
+  onTestVoice: () => void;
   onGoHome: () => void;
   onGoGrades: () => void;
   onOpenProgress: () => void;
@@ -16,6 +16,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   studentName,
+  onTestVoice,
   onGoHome,
   onGoGrades,
   onOpenProgress,
@@ -23,10 +24,6 @@ export const Header: React.FC<HeaderProps> = ({
   rulerActive,
   onToggleRuler
 }) => {
-  const handleCheerSound = () => {
-    cheerWelcome(studentName || 'يا بطلة القراءة');
-  };
-
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white shadow-md border-b border-pink-400/30">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-3">
@@ -86,13 +83,14 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Cheering Voice & Friendly Quick Tools */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Instant Spoken Encouragement Button without written label */}
+          {/* Female Reader Voice Test Button */}
           <button
-            onClick={handleCheerSound}
-            title="استماع"
-            className="p-2 sm:px-3 sm:py-1.5 text-xs font-black rounded-xl bg-white text-rose-600 hover:bg-rose-50 border border-rose-200 shadow-sm flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200"
+            onClick={onTestVoice}
+            title="صوت القارئة (انقري للاستماع التجريبي للترحيب)"
+            className="px-2.5 sm:px-3 py-1.5 text-xs font-black rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/25 shadow-xs flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all"
           >
-            <Volume2 className="w-4 h-4 text-rose-500 animate-pulse" />
+            <span className="text-sm">🎙️</span>
+            <span className="font-cairo font-bold">صوت القارئة</span>
           </button>
 
           {/* Reading Focus Ruler Toggle */}
@@ -111,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Reading Font & Color Settings */}
           <button
             onClick={onOpenToolbox}
-            title="تغيير حجم الخط وتنسيق الألوان المريحة للعين"
+            title="تغيير حجم الخط وتنسيق الألوان المريحة للعين وإعدادات القراءة"
             className="p-2 text-white bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-colors cursor-pointer"
           >
             <Settings2 className="w-4 h-4" />
@@ -124,7 +122,9 @@ export const Header: React.FC<HeaderProps> = ({
       {studentName.trim() && (
         <div className="bg-white/10 backdrop-blur-xs py-1 px-4 text-center text-xs font-bold text-pink-100 flex items-center justify-center gap-2 border-t border-white/10">
           <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-          <span>مرحباً ببطلة القراءة: <strong className="text-white underline decoration-amber-300">{studentName}</strong> 🌸 نحن فخورون بكِ وبإبداعكِ!</span>
+          <span>
+            مرحباً ببطلة القراءة: <strong className="text-white underline decoration-amber-300">{studentName}</strong> 🌸 بصحبة قارئة النصوص في مركز مصادر التعلم!
+          </span>
         </div>
       )}
     </header>

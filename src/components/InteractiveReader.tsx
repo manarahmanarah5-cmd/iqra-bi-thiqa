@@ -18,6 +18,7 @@ import {
 import { ReadingLesson, UserPreferences, VocabularyWord } from '../types';
 import { WordInspectorModal } from './WordInspectorModal';
 import { AudioRecorder } from './AudioRecorder';
+import { getTeacherVoiceProfile, playFemaleTeacherAudio, stopAllSpeech } from '../utils/audioCheer';
 
 interface InteractiveReaderProps {
   lesson: ReadingLesson;
@@ -51,93 +52,110 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
   // Audio / Speech Synthesis refs
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const wordsRef = useRef<string[]>([]);
+  const highlightTimerRef = useRef<number | null>(null);
 
-  // Split text into words while keeping diacritics
-  const activeText = preferences.showDiacritics ? lesson.diacritizedText : lesson.plainText;
-  const words = activeText.split(/\s+/).filter(w => w.length > 0);
-  wordsRef.current = words;
+  // Split text into words with continuous global indices across all paragraphs
+  const paragraphWordList = React.useMemo(() => {
+    let counter = 0;
+    return lesson.paragraphs.map(p => {
+      const pText = preferences.showDiacritics ? p : p.replace(/[ًٌٍَُِّْ]/g, '');
+      const pWords = pText.split(/\s+/).filter(w => w.trim().length > 0);
+      return pWords.map(w => {
+        const item = { word: w, globalIndex: counter };
+        counter++;
+        return item;
+      });
+    });
+  }, [lesson.paragraphs, preferences.showDiacritics]);
 
-  // Cleanup speech on unmount or lesson change
+  const totalWords = React.useMemo(() => {
+    return paragraphWordList.reduce((acc, p) => acc + p.length, 0);
+  }, [paragraphWordList]);
+
+  // Cleanup speech and highlight timer on unmount or lesson change
   useEffect(() => {
     return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
+      if (highlightTimerRef.current) {
+        clearInterval(highlightTimerRef.current);
+        highlightTimerRef.current = null;
       }
+      stopAllSpeech();
     };
   }, [lesson.id]);
 
-  // Speech Synthesis Implementation
+  // High-fidelity Female Teacher Voice Playback with synchronized word highlighting
   const handlePlayTTS = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('خاصية القراءة الصوتية غير مدعومة في هذا المتصفح.');
-      return;
-    }
-
     if (isPlaying) {
-      window.speechSynthesis.cancel();
+      if (highlightTimerRef.current) {
+        clearInterval(highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+      stopAllSpeech();
       setIsPlaying(false);
       setCurrentWordIndex(null);
       return;
     }
 
-    window.speechSynthesis.cancel();
+    const textToRead = lesson.diacritizedText || lesson.plainText;
+    const profile = getTeacherVoiceProfile(preferences.teacherVoice);
+    const speed = preferences.speechRate || profile.rate || 1.0;
 
-    // Utterance
-    const utterance = new SpeechSynthesisUtterance(lesson.plainText);
-    utterance.lang = 'ar-SA';
-    utterance.rate = preferences.speechRate || 0.85;
-
-    // Pick best Arabic voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const arabicVoice = voices.find(v => v.lang.startsWith('ar'));
-    if (arabicVoice) {
-      utterance.voice = arabicVoice;
-    }
-
-    // Word boundary tracking
-    let wordIdx = 0;
-    utterance.onboundary = (event) => {
-      if (event.name === 'word') {
-        setCurrentWordIndex(wordIdx);
-        wordIdx++;
-      }
-    };
-
-    utterance.onend = () => {
-      setIsPlaying(false);
-      setCurrentWordIndex(null);
-    };
-
-    utterance.onerror = () => {
-      setIsPlaying(false);
-      setCurrentWordIndex(null);
-    };
-
-    utteranceRef.current = utterance;
     setIsPlaying(true);
-    window.speechSynthesis.speak(utterance);
+    setCurrentWordIndex(0);
+
+    // Timed word highlighting advancing with audio
+    if (highlightTimerRef.current) clearInterval(highlightTimerRef.current);
+    const msPerWord = Math.round(520 / speed);
+    highlightTimerRef.current = window.setInterval(() => {
+      setCurrentWordIndex(prev => {
+        if (prev === null) return 0;
+        if (prev < totalWords - 1) return prev + 1;
+        return prev;
+      });
+    }, msPerWord);
+
+    playFemaleTeacherAudio(textToRead, {
+      teacher: preferences.teacherVoice,
+      playbackRate: speed,
+      onStart: () => setIsPlaying(true),
+      onEnd: () => {
+        if (highlightTimerRef.current) {
+          clearInterval(highlightTimerRef.current);
+          highlightTimerRef.current = null;
+        }
+        setIsPlaying(false);
+        setCurrentWordIndex(null);
+      },
+      onError: () => {
+        if (highlightTimerRef.current) {
+          clearInterval(highlightTimerRef.current);
+          highlightTimerRef.current = null;
+        }
+        setIsPlaying(false);
+        setCurrentWordIndex(null);
+      },
+    });
   };
 
   const handleStopTTS = () => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (highlightTimerRef.current) {
+      clearInterval(highlightTimerRef.current);
+      highlightTimerRef.current = null;
     }
+    stopAllSpeech();
     setIsPlaying(false);
     setCurrentWordIndex(null);
   };
 
-  // Speak individual word
+  // Speak individual word with female teacher voice
   const speakWord = (word: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const clean = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،]/g, '');
-    const u = new SpeechSynthesisUtterance(clean);
-    u.lang = 'ar-SA';
-    u.rate = 0.75;
-    const voices = window.speechSynthesis.getVoices();
-    const arVoice = voices.find(v => v.lang.startsWith('ar'));
-    if (arVoice) u.voice = arVoice;
-    window.speechSynthesis.speak(u);
+    const clean = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،]/g, '').trim();
+    if (!clean) return;
+    const profile = getTeacherVoiceProfile(preferences.teacherVoice);
+    playFemaleTeacherAudio(clean, {
+      teacher: preferences.teacherVoice,
+      playbackRate: Math.max(0.75, (preferences.speechRate || profile.rate) - 0.1),
+    });
   };
 
   // Click on any word in the text
@@ -257,6 +275,16 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
           <span className="text-xs text-stone-400 hidden sm:inline mr-2">
             (سرعة النطق: {preferences.speechRate}x)
           </span>
+
+          {/* Female Reader Voice indicator */}
+          <button
+            onClick={onOpenToolbox}
+            title="إعدادات صوت القارئة من صندوق الأدوات"
+            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+          >
+            <span>🎙️</span>
+            <span>صوت أنثى (القارئة)</span>
+          </button>
         </div>
 
         {/* View Segment Tabs & Hints */}
@@ -333,31 +361,28 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
             }}
           >
             <div className="space-y-6 text-right font-naskh">
-              {lesson.paragraphs.map((paragraph, pIdx) => {
-                const paraWords = (preferences.showDiacritics ? paragraph : paragraph.replace(/[ًٌٍَُِّْ]/g, '')).split(' ');
-                
-                return (
-                  <p key={pIdx} className="leading-relaxed">
-                    {paraWords.map((w, wIdx) => {
-                      const globalWordIdx = pIdx * 50 + wIdx; // Heuristic tracking
-                      const isHighlighted = isPlaying && currentWordIndex === globalWordIdx;
-                      
-                      return (
-                        <span
-                          key={wIdx}
-                          onClick={() => handleWordClick(w)}
-                          title="انقر لفحص الكلمة ونطقها وتقطيعها صوتياً"
-                          className={`inline-block mx-1 my-0.5 px-1 rounded-sm cursor-pointer select-text transition-all reading-word ${
-                            isHighlighted ? 'active-tts' : 'hover:bg-amber-100 hover:text-amber-900'
-                          } ${preferences.highlightDiacritics ? 'highlight-diacritics' : ''}`}
-                        >
-                          {w}
-                        </span>
-                      );
-                    })}
-                  </p>
-                );
-              })}
+              {paragraphWordList.map((paraWords, pIdx) => (
+                <p key={pIdx} className="leading-relaxed">
+                  {paraWords.map(({ word: w, globalIndex }) => {
+                    const isHighlighted = isPlaying && currentWordIndex === globalIndex;
+                    
+                    return (
+                      <span
+                        key={globalIndex}
+                        onClick={() => handleWordClick(w)}
+                        title="انقر لفحص الكلمة ونطقها وتقطيعها صوتياً"
+                        className={`inline-block mx-1 my-0.5 px-1.5 py-0.5 rounded-lg cursor-pointer select-text transition-all reading-word ${
+                          isHighlighted
+                            ? 'bg-amber-400 text-stone-950 font-black shadow-sm scale-105 ring-2 ring-amber-500'
+                            : 'hover:bg-amber-100 hover:text-amber-900'
+                        } ${preferences.highlightDiacritics ? 'highlight-diacritics' : ''}`}
+                      >
+                        {w}
+                      </span>
+                    );
+                  })}
+                </p>
+              ))}
             </div>
 
             {/* Instruction Tip */}
@@ -651,6 +676,7 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
           onClose={() => setSelectedWord(null)}
           onAskAi={(w) => onAskAi(`اشرح لي بالتفصيل وبأسلوب مبسط كلمة "${w}" وكيف أقرؤها جيداً.`)}
           onSpeak={speakWord}
+          teacherVoice={preferences.teacherVoice}
         />
       )}
 
