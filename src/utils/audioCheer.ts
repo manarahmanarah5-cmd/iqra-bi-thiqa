@@ -113,6 +113,65 @@ export function playPopSound() {
 // Female Teacher Voice Engine (Strictly No Male Voice)
 // --------------------------------------------------------------------------
 
+export interface TeacherVoiceOption {
+  id: TeacherVoice;
+  name: string;
+  badge: string;
+  role: string;
+  icon: string;
+  avatar: string;
+  accent: string;
+  description: string;
+  samplePhrase: string;
+}
+
+export const TEACHER_VOICES: TeacherVoiceOption[] = [
+  {
+    id: 'zariyah',
+    name: 'المعلمة زارية',
+    badge: 'الأفصح بالتشكيل الكامل ✨',
+    role: 'قارئة فصيحة متقنة لمخارج الحروف',
+    icon: '🎙️',
+    avatar: '👩‍🏫',
+    accent: 'فصحى معيارية مشكولة',
+    description: 'نبرة نسائية صافية ومخارج حروف واضحة جداً، متقنة للتشكيل الإعرابي والتنوين والمدود، مثالية لطلاب صعوبات التعلم.',
+    samplePhrase: 'مرحباً بكِ يا مبدعة! أنا المعلمة زارية، هيا نقرأ معاً بصوت نقي وفصيح بالتشكيل التام!'
+  },
+  {
+    id: 'aysha',
+    name: 'المعلمة عائشة',
+    badge: 'الصوت العُماني الأصيل 🇴🇲',
+    role: 'قارئة نصوص المنهج العُماني',
+    icon: '🇴🇲',
+    avatar: '🧕',
+    accent: 'عُمانية أصيلة دافئة',
+    description: 'نبرة صوتية أنثوية عُمانية دافئة وهادئة، تمنح الطالبات الألفة والتشجيع أثناء قراءة نصوص كتاب مهاراتي في القراءة.',
+    samplePhrase: 'أهلاً بكِ في سلطنة عُمان، أنا المعلمة عائشة، يسعدني أن أرافقكِ في دروس القراءة الممتعة!'
+  },
+  {
+    id: 'salma',
+    name: 'المعلمة سلمى',
+    badge: 'النبرة التربوية الودودة 🌸',
+    role: 'أخصائية التوجيه والتشجيع القرائي',
+    icon: '🌸',
+    avatar: '👩‍🏫',
+    accent: 'تربوية هادئة ومشجعة',
+    description: 'صوت نسائي دافئ ولطيف مفعم بالتشجيع والهدوء لتعزيز الطمأنينة والثقة بالنفس.',
+    samplePhrase: 'أهلاً يا ذكية، أنا المعلمة سلمى، أنتِ قادرة على القراءة بكل ثقة وبراعة، هيا ننطلق!'
+  },
+  {
+    id: 'kore',
+    name: 'القارئة الذكية كوري',
+    badge: 'ذكاء اصطناعي فائق النقاء 🤖',
+    role: 'القارئة التوليدية المتطورة',
+    icon: '✨',
+    avatar: '🎧',
+    accent: 'عربية فصحى رقمية نقية',
+    description: 'صوت أنثوي عصري نقي وعالي الجودة تم توليده بأحدث تقنيات الصوت العصبي الذكي.',
+    samplePhrase: 'أهلاً وسهلاً بكِ، أنا القارئة الذكية، يسعدني التدرب معكِ على القراءة المتقنة خطوة بخطوة!'
+  }
+];
+
 const MALE_VOICE_KEYWORDS = [
   'naayf', 'nayf', 'نايف', 'tariq', 'tarik', 'طارق', 'maged', 'majed', 'ماجد',
   'shakir', 'شاكر', 'hamed', 'حامد', 'bilal', 'بلال', 'salim', 'سالم',
@@ -130,13 +189,23 @@ const FEMALE_VOICE_KEYWORDS = [
 ];
 
 export function getActiveTeacherVoice(): TeacherVoice {
-  return 'female';
+  if (typeof window === 'undefined') return 'zariyah';
+  try {
+    const saved = localStorage.getItem('iqra_teacher_voice') as TeacherVoice;
+    if (saved && ['zariyah', 'aysha', 'salma', 'kore'].includes(saved)) {
+      return saved;
+    }
+  } catch {
+    // ignore
+  }
+  return 'zariyah';
 }
 
-export function setActiveTeacherVoice(_voice: TeacherVoice) {
+export function setActiveTeacherVoice(voice: TeacherVoice) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem('iqra_teacher_voice', 'female');
+    const val = voice === 'female' ? 'zariyah' : voice;
+    localStorage.setItem('iqra_teacher_voice', val);
   } catch {
     // ignore
   }
@@ -144,7 +213,7 @@ export function setActiveTeacherVoice(_voice: TeacherVoice) {
 
 /**
  * Searches for an authentic Arabic female voice from the browser's speech synthesis engine.
- * Strictly eliminates male voices, prioritizing recognized female voices (Salma, Hoda, Laila, Zeina, Mariam, Sana, etc.)
+ * Strictly eliminates male voices.
  */
 export function getArabicFemaleVoice(_preferredTeacher?: TeacherVoice): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
@@ -158,50 +227,74 @@ export function getArabicFemaleVoice(_preferredTeacher?: TeacherVoice): SpeechSy
     arVoices = voices.filter(v => v.name.toLowerCase().includes('arabic') || v.name.includes('عربي'));
   }
 
-  // 1. Look for explicit female voices FIRST
+  // 1. Look for confirmed female voice
   const explicitFemale = arVoices.find(v => {
     const name = v.name.toLowerCase();
+    const isMale = MALE_VOICE_KEYWORDS.some(k => name.includes(k));
+    if (isMale) return false;
     return FEMALE_VOICE_KEYWORDS.some(k => name.includes(k));
   });
   if (explicitFemale) return explicitFemale;
 
-  // 2. Filter out any voice with known male names
-  const nonMaleVoices = arVoices.filter(v => {
-    const nameLower = v.name.toLowerCase();
-    return !MALE_VOICE_KEYWORDS.some(k => nameLower.includes(k));
-  });
-
-  if (nonMaleVoices.length > 0) {
-    return nonMaleVoices[0];
-  }
-
-  // 3. If only a single generic Arabic voice exists, return it (it will be pitched high to feminine register)
-  if (arVoices.length > 0) {
-    return arVoices[0];
-  }
-
+  // 2. Strict check: NEVER return generic Arabic voice if it might be male!
   return null;
 }
 
 /**
  * Returns phonetic and acoustic parameters for the female reader voice.
- * Setting pitch to 1.48 ensures a sweet, distinct, warm female tone.
  */
-export function getTeacherVoiceProfile(_teacher?: TeacherVoice) {
+export function getTeacherVoiceProfile(teacher?: TeacherVoice) {
+  const activeId = (!teacher || teacher === 'female') ? getActiveTeacherVoice() : teacher;
+  const match = TEACHER_VOICES.find(v => v.id === activeId) || TEACHER_VOICES[0];
+
   return {
-    id: 'female' as const,
-    name: 'صوت القارئة (صوت أنثى نقي)',
-    shortName: 'القارئة',
-    role: 'قارئة النصوص التعليمية',
-    pitch: 1.48,
-    rate: 0.88,
-    icon: '🎙️',
-    description: 'نبرة صوتية نسائية تربوية صافية وواضحة بالتشكيل التام لتعزيز الطلاقة القرائية.'
+    id: match.id,
+    name: match.name,
+    shortName: match.name.replace('المعلمة ', ''),
+    role: match.role,
+    pitch: 1.0,
+    rate: 0.92,
+    icon: match.icon,
+    avatar: match.avatar,
+    description: match.description,
+    samplePhrase: match.samplePhrase,
+    badge: match.badge,
+    accent: match.accent
   };
 }
 
 // Global reference to active audio element to allow instant stopping
 let currentTeacherAudio: HTMLAudioElement | null = null;
+const blobAudioCache = new Map<string, string>();
+
+/**
+ * Pre-fetches female audio blob from the server
+ */
+export async function preloadFemaleAudio(text: string, teacher?: TeacherVoice): Promise<string | null> {
+  const activeTeacher = teacher || getActiveTeacherVoice();
+  const voiceKey = activeTeacher === 'female' ? 'zariyah' : activeTeacher;
+  const clean = text.trim();
+  const cacheKey = `${voiceKey}:${clean}`;
+
+  if (blobAudioCache.has(cacheKey)) {
+    return blobAudioCache.get(cacheKey)!;
+  }
+
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: clean, voice: voiceKey }),
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    blobAudioCache.set(cacheKey, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Stops any speech currently playing (both Audio element and SpeechSynthesis)
@@ -229,9 +322,9 @@ export function stopAllSpeech() {
 
 /**
  * Speaks Arabic text with the authentic Female Teacher Voice
- * Uses server-side high quality female TTS endpoint first, with strict client female-only fallback.
+ * Uses server-side high quality female TTS endpoint first with Blob caching, with strict client female-only fallback.
  */
-export function playFemaleTeacherAudio(
+export async function playFemaleTeacherAudio(
   text: string,
   options?: {
     teacher?: TeacherVoice;
@@ -248,48 +341,53 @@ export function playFemaleTeacherAudio(
     return;
   }
 
-  const teacher = options?.teacher || getActiveTeacherVoice();
-  const profile = getTeacherVoiceProfile(teacher);
   const cleanText = text.trim();
+  const teacher = options?.teacher || getActiveTeacherVoice();
+  const voiceKey = teacher === 'female' ? 'zariyah' : teacher;
+  const profile = getTeacherVoiceProfile(teacher);
 
   try {
-    const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&teacher=${encodeURIComponent(teacher)}`;
-    const audio = new Audio(audioUrl);
-    currentTeacherAudio = audio;
+    let blobUrl = await preloadFemaleAudio(cleanText, teacher);
 
-    const rate = options?.playbackRate || profile.rate;
-    audio.playbackRate = rate;
-
-    audio.onplay = () => {
-      if (options?.onStart) options.onStart();
-    };
-
-    audio.onended = () => {
-      if (currentTeacherAudio === audio) {
-        currentTeacherAudio = null;
-      }
-      if (options?.onEnd) options.onEnd();
-    };
-
-    audio.onerror = () => {
-      if (currentTeacherAudio === audio) {
-        currentTeacherAudio = null;
-      }
-      fallbackToBrowserFemaleVoice(cleanText, teacher, options);
-    };
-
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        fallbackToBrowserFemaleVoice(cleanText, teacher, options);
-      });
+    // If first attempt failed, retry once with zariyah standard female
+    if (!blobUrl && voiceKey !== 'zariyah') {
+      blobUrl = await preloadFemaleAudio(cleanText, 'zariyah');
     }
-  } catch {
-    fallbackToBrowserFemaleVoice(cleanText, teacher, options);
+
+    if (blobUrl) {
+      const audio = new Audio(blobUrl);
+      currentTeacherAudio = audio;
+      audio.playbackRate = options?.playbackRate || profile.rate;
+
+      audio.onplay = () => {
+        if (options?.onStart) options.onStart();
+      };
+
+      audio.onended = () => {
+        if (currentTeacherAudio === audio) {
+          currentTeacherAudio = null;
+        }
+        if (options?.onEnd) options.onEnd();
+      };
+
+      audio.onerror = () => {
+        if (currentTeacherAudio === audio) {
+          currentTeacherAudio = null;
+        }
+        fallbackToStrictFemaleVoiceOnly(cleanText, teacher, options);
+      };
+
+      await audio.play();
+      return;
+    }
+  } catch (err) {
+    console.warn('Audio play error, checking female browser fallback:', err);
   }
+
+  fallbackToStrictFemaleVoiceOnly(cleanText, teacher, options);
 }
 
-function fallbackToBrowserFemaleVoice(
+function fallbackToStrictFemaleVoiceOnly(
   text: string,
   teacher: TeacherVoice,
   options?: {
@@ -304,31 +402,34 @@ function fallbackToBrowserFemaleVoice(
     return;
   }
 
-  // Cancel any lingering utterances to avoid overlap
+  const femaleVoice = getArabicFemaleVoice(teacher);
+  // STRICT RULE: If no confirmed female voice exists, NEVER play speech!
+  if (!femaleVoice) {
+    console.warn('No confirmed female voice in browser speech synthesis; suppressing male voice fallback per user policy.');
+    playChimeSound();
+    if (options?.onEnd) options.onEnd();
+    return;
+  }
+
   try {
     window.speechSynthesis.cancel();
-  } catch {
-    // ignore
-  }
-
-  const femaleVoice = getArabicFemaleVoice(teacher);
-  const profile = getTeacherVoiceProfile(teacher);
-  const utterance = new SpeechSynthesisUtterance(text);
-  if (femaleVoice) {
+    const profile = getTeacherVoiceProfile(teacher);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.voice = femaleVoice;
-  }
-  utterance.lang = 'ar-SA';
-  utterance.rate = options?.playbackRate || profile.rate;
-  // Feminine pitch (1.48): transforms the acoustic formant into a warm, gentle female teacher register
-  utterance.pitch = 1.48;
+    utterance.lang = 'ar-SA';
+    utterance.rate = options?.playbackRate || profile.rate;
+    utterance.pitch = 1.35;
 
-  if (options?.onStart) utterance.onstart = options.onStart;
-  if (options?.onEnd) {
-    utterance.onend = options.onEnd;
-    utterance.onerror = options.onEnd;
-  }
+    if (options?.onStart) utterance.onstart = options.onStart;
+    if (options?.onEnd) {
+      utterance.onend = options.onEnd;
+      utterance.onerror = options.onEnd;
+    }
 
-  window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    if (options?.onEnd) options.onEnd();
+  }
 }
 
 /**
@@ -345,7 +446,7 @@ export function speakCheer(text: string, onEnd?: () => void, customTeacher?: Tea
 export function speakEducationalHint(hintText: string, onEnd?: () => void, customTeacher?: TeacherVoice) {
   playChimeSound();
   const teacher = customTeacher || getActiveTeacherVoice();
-  playFemaleTeacherAudio(hintText, { teacher, onEnd, playbackRate: 0.82 });
+  playFemaleTeacherAudio(hintText, { teacher, onEnd, playbackRate: 0.85 });
 }
 
 /**
@@ -355,18 +456,20 @@ export function speakSyllablesSlowly(word: string, syllables: string[], explanat
   const teacher = customTeacher || getActiveTeacherVoice();
   const profile = getTeacherVoiceProfile(teacher);
   const chunksText = syllables.join(' ... ');
-  const fullText = `معكِ ${profile.shortName}. الكلمة هي: ${word}. استمعي لمقاطعها بروية: ${chunksText}.${explanation ? ` وتذكري: ${explanation}` : ''}`;
+  const fullText = `معكِ ${profile.name}. الكلمة هي: ${word}. استمعي لمقاطعها بروية: ${chunksText}.${explanation ? ` وتذكري: ${explanation}` : ''}`;
   speakEducationalHint(fullText, undefined, teacher);
 }
 
 /**
  * Test & Preview the Female Reader's Voice for instant confirmation in UI
  */
-export function speakTeacherGreeting(_teacher?: TeacherVoice, studentName?: string) {
+export function speakTeacherGreeting(teacher?: TeacherVoice, studentName?: string) {
   playChimeSound();
+  const activeTeacher = teacher || getActiveTeacherVoice();
+  const profile = getTeacherVoiceProfile(activeTeacher);
   const name = studentName && studentName.trim() ? studentName.trim() : 'يا بطلة القراءة';
-  const greeting = `مرحباً بكِ يا ${name}! أنا قارئتكِ المساعدة في مركز مصادر التعلم. هيا نقرأ النصوص معاً بصوت نقي وواضح بكل طمأنينة وإتقان!`;
-  playFemaleTeacherAudio(greeting);
+  const greeting = profile.samplePhrase.replace('يا مبدعة', `يا ${name}`);
+  playFemaleTeacherAudio(greeting, { teacher: activeTeacher });
 }
 
 // -------------------------------------------------------------

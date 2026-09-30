@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, Type, Eye, Palette, Sliders, Volume2, RotateCcw, Check } from 'lucide-react';
-import { ReadingTheme, UserPreferences } from '../types';
-import { speakTeacherGreeting } from '../utils/audioCheer';
+import { X, Type, Eye, Palette, Sliders, Volume2, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { ReadingTheme, UserPreferences, TeacherVoice } from '../types';
+import { speakTeacherGreeting, TEACHER_VOICES, setActiveTeacherVoice } from '../utils/audioCheer';
 
 interface ReadingToolboxProps {
   isOpen: boolean;
@@ -244,41 +244,76 @@ export const ReadingToolbox: React.FC<ReadingToolboxProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
                 <span className="text-base">🎙️</span>
-                <span>صوت القراءة (صوت أنثى نقي وواضح)</span>
+                <span>اختيار صوت المعلمة (صوت أنثى نقي وفصيح)</span>
               </div>
               <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded-full border border-rose-200">
-                صوت نسائي تربوي فقط ✨
+                صوت أنثوي خالص 100% ✨
               </span>
             </div>
 
-            <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/50 text-right space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🌸</span>
-                  <div>
-                    <h4 className="text-xs font-black text-stone-900 font-cairo">صوت القارئة الموجهة</h4>
-                    <span className="text-[10px] text-rose-700 block font-semibold">نطق عربي تربوي سليم وواضح بالتشكيل التام</span>
+            <p className="text-xs text-stone-500">
+              جميع الأصوات المعتمدة هي أصوات نسائية تربوية فصيحة ومشكولة بالكامل، مستبعد منها أي صوت رجالي نهائياً:
+            </p>
+
+            {/* Voices Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {TEACHER_VOICES.map((v) => {
+                const isSelected = (preferences.teacherVoice === v.id) || (preferences.teacherVoice === 'female' && v.id === 'zariyah');
+
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => {
+                      onChange(p => ({ ...p, teacherVoice: v.id }));
+                      setActiveTeacherVoice(v.id);
+                    }}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer relative flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-400 ring-offset-1 shadow-xs'
+                        : 'bg-stone-50 hover:bg-white hover:border-stone-300 border-stone-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{v.avatar}</span>
+                          <div>
+                            <h4 className="text-xs font-black text-stone-900 font-cairo flex items-center gap-1">
+                              <span>{v.name}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-rose-600 inline" />}
+                            </h4>
+                            <span className="text-[10px] text-stone-500 block">{v.accent}</span>
+                          </div>
+                        </div>
+                        <span className="text-[9px] bg-white font-bold text-rose-700 px-1.5 py-0.5 rounded-md border border-rose-200 shadow-2xs">
+                          {v.badge}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 leading-snug line-clamp-2 mb-2">
+                        {v.description}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        speakTeacherGreeting(v.id);
+                      }}
+                      className="w-full mt-1 py-1.5 px-2 bg-white hover:bg-rose-100 text-rose-800 text-[11px] font-bold rounded-lg border border-rose-200 flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Volume2 className="w-3 h-3 text-rose-600" />
+                      <span>تجربة صوت {v.name} 🔊</span>
+                    </button>
                   </div>
-                </div>
-                <Check className="w-4 h-4 text-rose-600 shrink-0" />
-              </div>
-              <p className="text-[11px] text-stone-600 leading-snug">
-                نبرة صوتية نسائية دافئة وواضحة، صُممت لمساعدة الطالبات على متابعة الكلمات، وتطوير الطلاقة، وضبط مخارج الحروف.
-              </p>
-              <button
-                type="button"
-                onClick={() => speakTeacherGreeting('female')}
-                className="w-full py-2 px-3 bg-white hover:bg-rose-100 text-rose-800 text-xs font-black rounded-lg border border-rose-200 flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-              >
-                <Volume2 className="w-3.5 h-3.5 text-rose-600" />
-                <span>استماع تجريبي لصوت القارئة 🔊</span>
-              </button>
+                );
+              })}
             </div>
 
             <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-950 flex items-center gap-2">
-              <span className="text-base shrink-0">✨</span>
+              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                <strong>صوت أنثوي خالص:</strong> تم استبعاد أي صوت رجالي نهائياً، وضبط التوليف الصوتي بطبقة ناعمة ومخارج دقيقة تناسب طالباتنا.
+                <strong>ضمان النبرة الأنثوية:</strong> تم ضبط محرك القراءة ليعمل بصوت أنثوي مشكول بالحركات الكاملة، ومستبعد منه أي صوت رجالي لضمان أجواء تعليمية مريحة ودافئة.
               </span>
             </div>
           </div>

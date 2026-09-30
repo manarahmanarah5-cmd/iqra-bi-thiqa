@@ -25,7 +25,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   rulerHeight: 65,
   rulerColor: 'rgba(254, 240, 138, 0.25)',
   speechRate: 0.85,
-  teacherVoice: 'female',
+  teacherVoice: 'zariyah',
 };
 
 const DEFAULT_STATS: UserStats = {

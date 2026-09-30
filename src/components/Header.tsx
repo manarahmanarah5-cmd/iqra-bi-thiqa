@@ -2,6 +2,7 @@ import React from 'react';
 import { Sliders, Settings2, Award, BookOpen, Sparkles, Home } from 'lucide-react';
 import { TeacherVoice } from '../types';
 import { CenterLogo } from './CenterLogo';
+import { getActiveTeacherVoice, getTeacherVoiceProfile } from '../utils/audioCheer';
 
 interface HeaderProps {
   studentName: string;
@@ -24,6 +25,8 @@ export const Header: React.FC<HeaderProps> = ({
   rulerActive,
   onToggleRuler
 }) => {
+  const currentVoiceProfile = getTeacherVoiceProfile(getActiveTeacherVoice());
+
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white shadow-md border-b border-pink-400/30">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-3">
@@ -86,11 +89,12 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Female Reader Voice Test Button */}
           <button
             onClick={onTestVoice}
-            title="صوت القارئة (انقري للاستماع التجريبي للترحيب)"
+            title={`صوت القارئة: ${currentVoiceProfile.name} (انقري للاستماع التجريبي)`}
             className="px-2.5 sm:px-3 py-1.5 text-xs font-black rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/25 shadow-xs flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all"
           >
-            <span className="text-sm">🎙️</span>
-            <span className="font-cairo font-bold">صوت القارئة</span>
+            <span className="text-sm">{currentVoiceProfile.avatar || '🎙️'}</span>
+            <span className="font-cairo font-bold hidden xs:inline">{currentVoiceProfile.name}</span>
+            <span className="font-cairo font-bold xs:hidden">صوت أنثى</span>
           </button>
 
           {/* Reading Focus Ruler Toggle */}

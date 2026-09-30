@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 
 dotenv.config();
 
@@ -161,20 +162,129 @@ function breakArabicWordSyllables(word: string): string {
 }
 
 // --------------------------------------------------------------------------
-// 100% Female Teacher Voice Engine (Gemini Neural Kore Voice)
-// صوت القارئة الافتراضية - نبرة أنثوية تربوية نقية وهادئة
+// 100% Female Neural Teacher Voice Engine
+// صوت القارئة الافتراضية - نبرة أنثوية تربوية صافية وعذبة وفصيحة بالتشكيل التام
+// أصوات معتمدة:
+// 1. الأستاذة زارية (ar-SA-ZariyahNeural) - فصحى مشكولة واضحة جداً
+// 2. المعلمة عائشة (ar-OM-AyshaNeural) - صوت أنثوي عُماني أصيل دافئ
+// 3. المعلمة سلمى (ar-EG-SalmaNeural) - صوت تربوي مشجع
 // --------------------------------------------------------------------------
 
 const ttsAudioCache = new Map<string, { buffer: Buffer; mimeType: string }>();
 
-async function generateFemaleArabicSpeech(text: string): Promise<{ buffer: Buffer; mimeType: string }> {
+function synthWithEdge(text: string, voiceName: string, timeoutMs: number = 9000): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const timer = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        reject(new Error(`Edge TTS timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
+
+    try {
+      const tts = new MsEdgeTTS();
+      tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
+        .then(() => {
+          const { audioStream } = tts.toStream(text);
+          const chunks: Buffer[] = [];
+          audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+          audioStream.on('end', () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            tts.close();
+            resolve(Buffer.concat(chunks));
+          });
+          audioStream.on('error', (err: any) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            tts.close();
+            reject(err);
+          });
+        })
+        .catch((err: any) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          tts.close();
+          reject(err);
+        });
+    } catch (e) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      reject(e);
+    }
+  });
+}
+
+async function generateFemaleArabicSpeech(text: string, preferredVoice?: string): Promise<{ buffer: Buffer; mimeType: string }> {
   if (!text || !text.trim()) {
     throw new Error('Empty text provided for TTS');
   }
 
   const clean = text.trim();
 
-  // If Google GenAI client is available, synthesize with gemini-3.8-flash-lite-tts and voice 'Kore'
+  // If user explicitly chose Gemini Kore
+  if (preferredVoice === 'kore' && aiClient) {
+    try {
+      const interaction = await aiClient.interactions.create({
+        model: 'gemini-3.8-flash-lite-tts',
+        input: [
+          {
+            type: 'text',
+            text: clean,
+            annotations: [
+              {
+                type: 'speech_metadata',
+                style: 'Gentle, encouraging female Arabic teacher reading aloud clearly with accurate diacritics',
+              },
+            ],
+          },
+        ],
+        response_modalities: ['audio'],
+        generation_config: {
+          speech_config: [
+            {
+              language: 'ar',
+              voice: 'Kore',
+            },
+          ],
+        },
+      });
+
+      const step = interaction.steps?.find((s) => s.type === 'model_output');
+      const audio = step?.content?.find((c) => c.type === 'audio');
+      if (audio && audio.data) {
+        const buffer = Buffer.from(audio.data, 'base64');
+        return { buffer, mimeType: audio.mime_type || 'audio/wav' };
+      }
+    } catch (err: any) {
+      console.warn('Gemini Kore failed, attempting Edge Zariyah fallback:', err?.message || err);
+    }
+  }
+
+  // Resolve requested Edge female persona
+  let edgeVoice = 'ar-SA-ZariyahNeural'; // Default: Ultra-crisp standard Arabic female voice
+  if (preferredVoice === 'aysha' || preferredVoice === 'omani') {
+    edgeVoice = 'ar-OM-AyshaNeural'; // Omani female voice
+  } else if (preferredVoice === 'salma') {
+    edgeVoice = 'ar-EG-SalmaNeural'; // Warm teacher
+  }
+
+  // 1. Primary: Microsoft Edge Neural TTS (Natural human female voice, clear diacritics)
+  try {
+    const buffer = await synthWithEdge(clean, edgeVoice, 8500);
+    if (buffer && buffer.length > 300) {
+      return { buffer, mimeType: 'audio/mpeg' };
+    }
+  } catch (edgeErr: any) {
+    console.warn('Edge Female TTS primary failed, attempting secondary fallback:', edgeErr?.message || edgeErr);
+  }
+
+  // 2. Secondary fallback: Gemini Kore female voice
   if (aiClient) {
     try {
       const interaction = await aiClient.interactions.create({
@@ -209,22 +319,23 @@ async function generateFemaleArabicSpeech(text: string): Promise<{ buffer: Buffe
         return { buffer, mimeType: audio.mime_type || 'audio/wav' };
       }
     } catch (err: any) {
-      console.warn('Gemini Female TTS call failed, falling back to client-side voice:', err?.message || err);
+      console.warn('Gemini Female TTS call failed:', err?.message || err);
     }
   }
 
-  throw new Error('Server-side female TTS unavailable; client speech synthesis will be used');
+  throw new Error('Server-side female TTS unavailable');
 }
 
 // GET /api/tts - Direct audio streaming for <audio> elements & new Audio()
 app.get('/api/tts', async (req, res) => {
   const text = (req.query.text as string) || '';
+  const voice = (req.query.voice as string) || (req.query.teacher as string) || 'zariyah';
 
   if (!text.trim()) {
     return res.status(400).send('Text parameter is required');
   }
 
-  const cacheKey = `female:${text.trim()}`;
+  const cacheKey = `female:${voice}:${text.trim()}`;
   if (ttsAudioCache.has(cacheKey)) {
     const cached = ttsAudioCache.get(cacheKey)!;
     res.setHeader('Content-Type', cached.mimeType);
@@ -233,8 +344,8 @@ app.get('/api/tts', async (req, res) => {
   }
 
   try {
-    const result = await generateFemaleArabicSpeech(text.trim());
-    if (text.length < 500 && ttsAudioCache.size < 500) {
+    const result = await generateFemaleArabicSpeech(text.trim(), voice);
+    if (text.length < 2000 && ttsAudioCache.size < 1000) {
       ttsAudioCache.set(cacheKey, result);
     }
     res.setHeader('Content-Type', result.mimeType);
@@ -247,13 +358,14 @@ app.get('/api/tts', async (req, res) => {
 
 // POST /api/tts - JSON or streaming endpoint
 app.post('/api/tts', async (req, res) => {
-  const { text } = req.body;
+  const { text, voice } = req.body;
 
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ error: 'Text is required for TTS' });
   }
 
-  const cacheKey = `female:${text.trim()}`;
+  const selectedVoice = voice || 'zariyah';
+  const cacheKey = `female:${selectedVoice}:${text.trim()}`;
   if (ttsAudioCache.has(cacheKey)) {
     const cached = ttsAudioCache.get(cacheKey)!;
     res.setHeader('Content-Type', cached.mimeType);
@@ -262,8 +374,8 @@ app.post('/api/tts', async (req, res) => {
   }
 
   try {
-    const result = await generateFemaleArabicSpeech(text.trim());
-    if (text.length < 500 && ttsAudioCache.size < 500) {
+    const result = await generateFemaleArabicSpeech(text.trim(), selectedVoice);
+    if (text.length < 2000 && ttsAudioCache.size < 1000) {
       ttsAudioCache.set(cacheKey, result);
     }
     res.setHeader('Content-Type', result.mimeType);
@@ -273,6 +385,25 @@ app.post('/api/tts', async (req, res) => {
     return res.status(503).json({ error: 'Failed to synthesize speech', details: err?.message });
   }
 });
+
+// Pre-warm initial female voice greetings in background
+setTimeout(async () => {
+  const phrases = [
+    'مرحباً بكِ يا بطلة القراءة في مركز مصادر التعلم! أنا قارئتكِ المساعدة، هيا نقرأ النصوص معاً بصوت نقي وواضح بكل طمأنينة وإتقان!',
+    'استمعي للقراءة النموذجية بتركيز، وتتبعي الكلمات الملونة، أنتِ رائعة!',
+    'هيا يا مبدعة، اقرئي بصوتكِ العذب والواضح، أنا أسمعكِ بكل محبة وتشجيع!',
+    'أحسنتِ يا بطلة! قراءة واثقة ومميزة، تزدادين تألقاً في كل مرة!'
+  ];
+  for (const phrase of phrases) {
+    try {
+      const result = await generateFemaleArabicSpeech(phrase, 'zariyah');
+      ttsAudioCache.set(`female:zariyah:${phrase}`, result);
+    } catch {
+      // ignore
+    }
+  }
+  console.log('Female reader voice greetings pre-warmed successfully.');
+}, 1000);
 
 // Pre-warm initial female voice greeting in background
 setTimeout(async () => {

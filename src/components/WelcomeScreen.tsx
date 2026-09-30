@@ -47,10 +47,15 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             </h1>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-rose-500 to-pink-500 text-white px-4 py-1.5 rounded-full text-xs font-black shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
-            <span>رِحْلَةُ الإِبْدَاعِ وَإِتْقَانِ الْقِرَاءِةِ وَالإِمْلَاءِ</span>
-            <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+              <span>رِحْلَةُ الإِبْدَاعِ وَإِتْقَانِ الْقِرَاءِةِ وَالإِمْلَاءِ</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1 rounded-full text-[11px] font-bold">
+              <span>🎙️</span>
+              <span>بصوت المعلمة (صوت أنثوي فصيح ومشكول)</span>
+            </div>
           </div>
 
           <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto leading-relaxed">

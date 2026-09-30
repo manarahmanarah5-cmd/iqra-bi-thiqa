@@ -13,12 +13,20 @@ import {
   CheckCircle2,
   Bookmark,
   Share2,
-  BookOpen
+  BookOpen,
+  Check
 } from 'lucide-react';
-import { ReadingLesson, UserPreferences, VocabularyWord } from '../types';
+import { ReadingLesson, UserPreferences, VocabularyWord, TeacherVoice } from '../types';
 import { WordInspectorModal } from './WordInspectorModal';
 import { AudioRecorder } from './AudioRecorder';
-import { getTeacherVoiceProfile, playFemaleTeacherAudio, stopAllSpeech } from '../utils/audioCheer';
+import {
+  getTeacherVoiceProfile,
+  playFemaleTeacherAudio,
+  stopAllSpeech,
+  TEACHER_VOICES,
+  speakTeacherGreeting,
+  setActiveTeacherVoice
+} from '../utils/audioCheer';
 
 interface InteractiveReaderProps {
   lesson: ReadingLesson;
@@ -41,6 +49,8 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentWordIndex, setCurrentWordIndex] = useState<number | null>(null);
+  const [playingParagraphIndex, setPlayingParagraphIndex] = useState<number | null>(null);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [selectedVocab, setSelectedVocab] = useState<VocabularyWord | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<'reading' | 'vocab' | 'tricky' | 'quiz'>('reading');
@@ -50,8 +60,6 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
   const [submittedQuiz, setSubmittedQuiz] = useState(false);
 
   // Audio / Speech Synthesis refs
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const wordsRef = useRef<string[]>([]);
   const highlightTimerRef = useRef<number | null>(null);
 
   // Split text into words with continuous global indices across all paragraphs
@@ -83,60 +91,6 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
     };
   }, [lesson.id]);
 
-  // High-fidelity Female Teacher Voice Playback with synchronized word highlighting
-  const handlePlayTTS = () => {
-    if (isPlaying) {
-      if (highlightTimerRef.current) {
-        clearInterval(highlightTimerRef.current);
-        highlightTimerRef.current = null;
-      }
-      stopAllSpeech();
-      setIsPlaying(false);
-      setCurrentWordIndex(null);
-      return;
-    }
-
-    const textToRead = lesson.diacritizedText || lesson.plainText;
-    const profile = getTeacherVoiceProfile(preferences.teacherVoice);
-    const speed = preferences.speechRate || profile.rate || 1.0;
-
-    setIsPlaying(true);
-    setCurrentWordIndex(0);
-
-    // Timed word highlighting advancing with audio
-    if (highlightTimerRef.current) clearInterval(highlightTimerRef.current);
-    const msPerWord = Math.round(520 / speed);
-    highlightTimerRef.current = window.setInterval(() => {
-      setCurrentWordIndex(prev => {
-        if (prev === null) return 0;
-        if (prev < totalWords - 1) return prev + 1;
-        return prev;
-      });
-    }, msPerWord);
-
-    playFemaleTeacherAudio(textToRead, {
-      teacher: preferences.teacherVoice,
-      playbackRate: speed,
-      onStart: () => setIsPlaying(true),
-      onEnd: () => {
-        if (highlightTimerRef.current) {
-          clearInterval(highlightTimerRef.current);
-          highlightTimerRef.current = null;
-        }
-        setIsPlaying(false);
-        setCurrentWordIndex(null);
-      },
-      onError: () => {
-        if (highlightTimerRef.current) {
-          clearInterval(highlightTimerRef.current);
-          highlightTimerRef.current = null;
-        }
-        setIsPlaying(false);
-        setCurrentWordIndex(null);
-      },
-    });
-  };
-
   const handleStopTTS = () => {
     if (highlightTimerRef.current) {
       clearInterval(highlightTimerRef.current);
@@ -145,15 +99,105 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
     stopAllSpeech();
     setIsPlaying(false);
     setCurrentWordIndex(null);
+    setPlayingParagraphIndex(null);
+  };
+
+  // Play a specific paragraph (or sequentially chain all paragraphs)
+  const playParagraph = (pIdx: number, autoAdvance: boolean) => {
+    if (highlightTimerRef.current) {
+      clearInterval(highlightTimerRef.current);
+      highlightTimerRef.current = null;
+    }
+    stopAllSpeech();
+
+    const paras = lesson.paragraphs && lesson.paragraphs.length > 0 ? lesson.paragraphs : [lesson.diacritizedText || lesson.plainText];
+    if (pIdx >= paras.length) {
+      handleStopTTS();
+      return;
+    }
+
+    const paraText = paras[pIdx];
+    const paraWords = paragraphWordList[pIdx] || [];
+    const startWordIdx = paraWords[0]?.globalIndex ?? 0;
+
+    setIsPlaying(true);
+    setPlayingParagraphIndex(pIdx);
+    setCurrentWordIndex(startWordIdx);
+
+    const activeVoice = preferences.teacherVoice || 'zariyah';
+    const profile = getTeacherVoiceProfile(activeVoice);
+    const speed = preferences.speechRate || profile.rate || 1.0;
+
+    // Timed word highlighting advancing with audio within this paragraph
+    const wordCountInPara = Math.max(1, paraWords.length);
+    const msPerWord = Math.round(500 / speed);
+    let currentInPara = 0;
+
+    highlightTimerRef.current = window.setInterval(() => {
+      currentInPara++;
+      if (currentInPara < wordCountInPara) {
+        setCurrentWordIndex(startWordIdx + currentInPara);
+      }
+    }, msPerWord);
+
+    playFemaleTeacherAudio(paraText, {
+      teacher: activeVoice,
+      playbackRate: speed,
+      onStart: () => {
+        setIsPlaying(true);
+        setPlayingParagraphIndex(pIdx);
+      },
+      onEnd: () => {
+        if (highlightTimerRef.current) {
+          clearInterval(highlightTimerRef.current);
+          highlightTimerRef.current = null;
+        }
+        if (autoAdvance && pIdx + 1 < paras.length) {
+          playParagraph(pIdx + 1, true);
+        } else {
+          setIsPlaying(false);
+          setCurrentWordIndex(null);
+          setPlayingParagraphIndex(null);
+        }
+      },
+      onError: () => {
+        if (highlightTimerRef.current) {
+          clearInterval(highlightTimerRef.current);
+          highlightTimerRef.current = null;
+        }
+        setIsPlaying(false);
+        setCurrentWordIndex(null);
+        setPlayingParagraphIndex(null);
+      },
+    });
+  };
+
+  // Toggle playback of the full lesson (starting from paragraph 0 and auto advancing)
+  const handlePlayTTS = () => {
+    if (isPlaying) {
+      handleStopTTS();
+    } else {
+      playParagraph(0, true);
+    }
+  };
+
+  // Play just a single paragraph without auto advancing
+  const playSingleParagraph = (pIdx: number) => {
+    if (isPlaying && playingParagraphIndex === pIdx) {
+      handleStopTTS();
+    } else {
+      playParagraph(pIdx, false);
+    }
   };
 
   // Speak individual word with female teacher voice
   const speakWord = (word: string) => {
     const clean = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()؟،]/g, '').trim();
     if (!clean) return;
-    const profile = getTeacherVoiceProfile(preferences.teacherVoice);
+    const activeVoice = preferences.teacherVoice || 'zariyah';
+    const profile = getTeacherVoiceProfile(activeVoice);
     playFemaleTeacherAudio(clean, {
-      teacher: preferences.teacherVoice,
+      teacher: activeVoice,
       playbackRate: Math.max(0.75, (preferences.speechRate || profile.rate) - 0.1),
     });
   };
@@ -192,6 +236,8 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
       default: return 'bg-white text-stone-900';
     }
   };
+
+  const currentVoiceProfile = getTeacherVoiceProfile(preferences.teacherVoice);
 
   return (
     <div className="space-y-6">
@@ -276,15 +322,82 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
             (سرعة النطق: {preferences.speechRate}x)
           </span>
 
-          {/* Female Reader Voice indicator */}
-          <button
-            onClick={onOpenToolbox}
-            title="إعدادات صوت القارئة من صندوق الأدوات"
-            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-          >
-            <span>🎙️</span>
-            <span>صوت أنثى (القارئة)</span>
-          </button>
+          {/* Female Reader Voice Quick Switcher */}
+          <div className="relative">
+            <button
+              onClick={() => setShowVoiceModal(prev => !prev)}
+              title="تغيير صوت المعلمة (اختيار بين أصوات نسائية معتمدة)"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              <span>{currentVoiceProfile.avatar || '🎙️'}</span>
+              <span className="font-cairo font-bold">{currentVoiceProfile.name} (أنثى)</span>
+              <span className="text-[10px] text-rose-500">▼</span>
+            </button>
+
+            {/* Quick Voice Picker Popover */}
+            {showVoiceModal && (
+              <div className="absolute top-full mt-2 right-0 z-50 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-rose-200 p-3 text-right space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">🎙️</span>
+                    <span className="text-xs font-black text-stone-900 font-cairo">صوت المعلمة (أنثى فصيحة فقط)</span>
+                  </div>
+                  <button
+                    onClick={() => setShowVoiceModal(false)}
+                    className="text-stone-400 hover:text-stone-700 p-1 text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-[10px] text-stone-500 leading-tight">
+                  جميع الخيارات هي أصوات نسائية تربوية فصيحة، ومستبعد منها أي صوت رجالي نهائياً:
+                </p>
+                <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                  {TEACHER_VOICES.map((v) => {
+                    const isSelected = (preferences.teacherVoice === v.id) || (preferences.teacherVoice === 'female' && v.id === 'zariyah');
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => {
+                          preferences.teacherVoice = v.id;
+                          setActiveTeacherVoice(v.id);
+                          setShowVoiceModal(false);
+                          speakTeacherGreeting(v.id);
+                        }}
+                        className={`p-2 rounded-xl border text-right transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                          isSelected
+                            ? 'bg-rose-50 border-rose-400 font-bold'
+                            : 'hover:bg-stone-50 border-stone-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{v.avatar}</span>
+                          <div>
+                            <div className="text-xs font-black text-stone-900">{v.name}</div>
+                            <div className="text-[10px] text-stone-500">{v.accent}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              speakTeacherGreeting(v.id);
+                            }}
+                            className="p-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 text-xs cursor-pointer"
+                            title="استماع تجريبي لصوت المعلمة"
+                          >
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                          {isSelected && <Check className="w-4 h-4 text-rose-600" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* View Segment Tabs & Hints */}
@@ -361,28 +474,59 @@ export const InteractiveReader: React.FC<InteractiveReaderProps> = ({
             }}
           >
             <div className="space-y-6 text-right font-naskh">
-              {paragraphWordList.map((paraWords, pIdx) => (
-                <p key={pIdx} className="leading-relaxed">
-                  {paraWords.map(({ word: w, globalIndex }) => {
-                    const isHighlighted = isPlaying && currentWordIndex === globalIndex;
-                    
-                    return (
-                      <span
-                        key={globalIndex}
-                        onClick={() => handleWordClick(w)}
-                        title="انقر لفحص الكلمة ونطقها وتقطيعها صوتياً"
-                        className={`inline-block mx-1 my-0.5 px-1.5 py-0.5 rounded-lg cursor-pointer select-text transition-all reading-word ${
-                          isHighlighted
-                            ? 'bg-amber-400 text-stone-950 font-black shadow-sm scale-105 ring-2 ring-amber-500'
-                            : 'hover:bg-amber-100 hover:text-amber-900'
-                        } ${preferences.highlightDiacritics ? 'highlight-diacritics' : ''}`}
-                      >
-                        {w}
+              {paragraphWordList.map((paraWords, pIdx) => {
+                const isThisParaPlaying = isPlaying && playingParagraphIndex === pIdx;
+
+                return (
+                  <div
+                    key={pIdx}
+                    className={`relative p-3.5 sm:p-5 rounded-2xl transition-all border ${
+                      isThisParaPlaying
+                        ? 'bg-amber-500/10 border-amber-300 ring-2 ring-amber-400/40 shadow-xs'
+                        : 'border-transparent hover:border-stone-200/80 hover:bg-stone-500/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3 border-b border-stone-200/50 pb-2">
+                      <span className="text-[11px] font-bold text-stone-600 bg-stone-200/70 px-2.5 py-0.5 rounded-md font-sans">
+                        الفقرة {pIdx + 1}
                       </span>
-                    );
-                  })}
-                </p>
-              ))}
+                      <button
+                        onClick={() => playSingleParagraph(pIdx)}
+                        title="استمع لقراءة هذه الفقرة بصوت المعلمة"
+                        className={`px-3 py-1 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs font-sans active:scale-95 ${
+                          isThisParaPlaying
+                            ? 'bg-amber-600 text-white border-amber-600 font-black'
+                            : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                        }`}
+                      >
+                        {isThisParaPlaying ? <Pause className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-rose-600" />}
+                        <span>{isThisParaPlaying ? 'إيقاف الفقرة' : 'استمع لهذه الفقرة 🔊'}</span>
+                      </button>
+                    </div>
+
+                    <p className="leading-relaxed">
+                      {paraWords.map(({ word: w, globalIndex }) => {
+                        const isHighlighted = isPlaying && currentWordIndex === globalIndex;
+                        
+                        return (
+                          <span
+                            key={globalIndex}
+                            onClick={() => handleWordClick(w)}
+                            title="انقر لفحص الكلمة ونطقها وتقطيعها صوتياً"
+                            className={`inline-block mx-1 my-0.5 px-1.5 py-0.5 rounded-lg cursor-pointer select-text transition-all reading-word ${
+                              isHighlighted
+                                ? 'bg-amber-400 text-stone-950 font-black shadow-sm scale-105 ring-2 ring-amber-500'
+                                : 'hover:bg-amber-100 hover:text-amber-900'
+                            } ${preferences.highlightDiacritics ? 'highlight-diacritics' : ''}`}
+                          >
+                            {w}
+                          </span>
+                        );
+                      })}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Instruction Tip */}

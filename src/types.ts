@@ -66,7 +66,7 @@ export interface ReadingLesson {
   pedagogicalFocus: string;
 }
 
-export type TeacherVoice = 'female';
+export type TeacherVoice = 'female' | 'zariyah' | 'aysha' | 'salma' | 'kore';
 
 export interface UserPreferences {
   theme: ReadingTheme;
